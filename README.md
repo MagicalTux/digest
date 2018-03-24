@@ -6,7 +6,7 @@ Simple HTTP digest lib in Go (yes, yet another one blah blah)
 After importing the digest lib:
 
 ```go
-  headers.Set("WWW-Authenticate", MakeDigestHeader(AuthDigest("realm")))
+  headers.Set("WWW-Authenticate", digest.MakeDigestHeader(digest.AuthDigest("realm")))
 ```
 
 And to check the result:
