@@ -16,20 +16,24 @@ import (
 )
 
 var (
-	digestCookie   []byte
-	validKeysMutex sync.Mutex
-	validKeys      map[int64]map[uint64]bool
+	digestCookie []byte // random cookie generated in init() used to sign & check signatures
+
+	usedKeys      map[int64]map[uint64]bool // keys which were used recently
+	usedKeysMutex sync.Mutex
 )
 
 func init() {
+	// initialize cookie from random data, panic if fails
 	digestCookie = make([]byte, 32)
 	_, err := rand.Read(digestCookie)
 	if err != nil {
 		panic(err)
 	}
 
-	validKeys = make(map[int64]map[uint64]bool)
-	go validNonceKeysCleanupThread()
+	// initialize used keys
+	usedKeys = make(map[int64]map[uint64]bool)
+	// cleanup thread to avoid clottering the memory
+	go usedNonceKeysCleanupThread()
 }
 
 type Digest struct {
@@ -40,27 +44,27 @@ type Digest struct {
 	Response map[string]string
 }
 
-func validNonceKeysCleanupThread() {
+func usedNonceKeysCleanupThread() {
 	t := time.NewTimer(5 * time.Minute)
 
 	for {
 		select {
 		case <-t.C:
-			validNonceKeysCleanupOp()
+			usedNonceKeysCleanupOp()
 		}
 	}
 }
 
-func validNonceKeysCleanupOp() {
-	validKeysMutex.Lock()
-	defer validKeysMutex.Unlock()
+func usedNonceKeysCleanupOp() {
+	usedKeysMutex.Lock()
+	defer usedKeysMutex.Unlock()
 
 	curK := time.Now().Unix() / 60
 	minK := curK - 10
 
-	for i, _ := range validKeys {
+	for i, _ := range usedKeys {
 		if i < minK {
-			delete(validKeys, i)
+			delete(usedKeys, i)
 		}
 	}
 }
@@ -84,14 +88,14 @@ func onceDigestNonce(nonce []byte) error {
 
 	onceK := onceV / 60
 
-	validKeysMutex.Lock()
-	defer validKeysMutex.Unlock()
+	usedKeysMutex.Lock()
+	defer usedKeysMutex.Unlock()
 
-	m, ok := validKeys[onceK]
+	m, ok := usedKeys[onceK]
 	if !ok {
 		m = make(map[uint64]bool)
 		m[subK] = true
-		validKeys[onceK] = m
+		usedKeys[onceK] = m
 		return nil
 	}
 
